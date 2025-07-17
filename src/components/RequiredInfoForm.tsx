@@ -1,15 +1,19 @@
-import { useState } from 'react';
-import { format } from "date-fns"
-import { Calendar as CalendarIcon } from "lucide-react"
-import type { FormData } from '../types'
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { Calendar } from "@/components/ui/calendar"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Speech, Drum, ShoppingCart, Video, Info } from "lucide-react"
+import type { ScriptType, SingleProductFormData, GuestInteractionFormData, ProductSellingPointFormData } from '../types'
+import { Calendar24 } from "@/components/ui/calendarTime"
+import ProductList from './ProductList'
+
+// 定义ProductListRef接口
+interface ProductListRef {
+  getJoinedProductData: () => {
+    product_id: string;
+    product_name: string;
+    product_price: string;
+    product_spec: string;
+    sellpoint: string;
+  };
+}
 import {
   Select,
   SelectContent,
@@ -18,504 +22,471 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-interface Product {
-  id: string;
-  productId: string;
-  brandName: string;
-  liveTime: string;
-  liveTheme: string;
-  liveType: string;
-  host: string;
-  celebrity: string;
-  productFeatures: string;
-  competitorAnalysis: string;
-  marketPosition: string;
-  // 更多信息字段
-  productName: string;
-  productSpec: string;
-  productPrice: string;
-  productDiscount: string;
-  liveSegmentDesign: string;
-  materialProps: string;
-  cpv: string;
-  productSellingPoints: string;
-  productDetailImages: string;
-}
-
 interface RequiredInfoFormProps {
-  activeTab: string;
-  onDataChange?: (data: { formData: FormData; products: Product[] }) => void;
+  activeTab: ScriptType;
+  onDataChange?: (data: SingleProductFormData | GuestInteractionFormData | ProductSellingPointFormData) => void;
+  onValidationChange?: (isValid: boolean) => void;
+  triggerValidation?: boolean;
 }
 
 export default function RequiredInfoForm({ 
   activeTab,
-  onDataChange
+  onDataChange,
+  onValidationChange,
+  triggerValidation = false
 }: RequiredInfoFormProps) {
-  const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
-  const [products, setProducts] = useState<Product[]>([
-    {
-      id: '1',
-      productId: '',
-      brandName: '',
-      liveTime: '',
-      liveTheme: '',
-      liveType: '',
-      host: '',
-      celebrity: '',
-      productFeatures: '',
-      competitorAnalysis: '',
-      marketPosition: '',
-      // 更多信息字段
-      productName: '',
-      productSpec: '',
-      productPrice: '',
-      productDiscount: '',
-      liveSegmentDesign: '',
-      materialProps: '',
-      cpv: '',
-      productSellingPoints: '',
-      productDetailImages: ''
-    }
-  ]);
-  const [formData, setFormData] = useState<FormData>({
-    productId: '',
-    brandName: '',
-    liveTime: '',
-    liveTheme: '',
-    liveType: '',
-    host: '',
-    celebrity: '',
-    liveDate: '',
-    hostName: '',
-    liveTopicRight: '',
-    liveTypeRight: '',
-    targetAudience: '',
-    productFeatures: '',
-    competitorAnalysis: '',
-    marketPosition: '',
-    liveSegmentDesign: '',
-    materialProps: ''
+
+  const productListRef = useRef<ProductListRef>(null);
+  const [isProductListValid, setIsProductListValid] = useState(false);
+  
+  // 单人推品表单数据
+  const [singleProductData, setSingleProductData] = useState<SingleProductFormData>({
+    product_name: '',
+    product_id: '',
+    product_spec: '',
+    product_price: '',
+    cpv: '',
+    sellpoint: '',
+    brand_name: '',
+    live_topic: '',
+    live_time: '',
+    live_type: '',
+    anchor_name: '',
+    product_type: '',
+    sessions: '',
+    props: '',
+    user_portrait: '',
+    live_video_transcript: ''
   });
 
-  const handleInputChange = (field: string, value: string) => {
-    const newFormData = { ...formData, [field]: value };
-    setFormData(newFormData);
-    onDataChange?.({ formData: newFormData, products });
-  };
+  // 嘉宾互动表单数据
+  const [guestInteractionData, setGuestInteractionData] = useState<GuestInteractionFormData>({
+    product_name: '',
+    product_id: '',
+    product_spec: '',
+    product_price: '',
+    cpv: '',
+    sellpoint: '',
+    brand_name: '',
+    live_topic: '',
+    live_time: '',
+    live_type: '',
+    anchor_name: '',
+    product_type: '',
+    sessions: '',
+    props: '',
+    user_portrait: '',
+    guests: ''
+  });
 
-  const handleProductChange = (productId: string, field: string, value: string) => {
-    const newProducts = products.map(product => 
-      product.id === productId 
-        ? { ...product, [field]: value }
-        : product
-    );
-    setProducts(newProducts);
-    onDataChange?.({ formData, products: newProducts });
-  };
+  // 商品卖点表单数据
+  const [sellingPointData, setSellingPointData] = useState<ProductSellingPointFormData>({
+    product_name: '',
+    product_id: '',
+    product_spec: '',
+    product_price: '',
+    cpv: '',
+    sellpoint: '',
+    retail_price: '',
+    discount: '',
+    mechanism: '',
+    logistics: '',
+    pr_date: '',
+    brand_info: '',
+    display: '',
+    intro: ''
+  });
 
-  const handleAddProduct = () => {
-    const newProduct: Product = {
-      id: Date.now().toString(),
-      productId: '',
-      brandName: '',
-      liveTime: '',
-      liveTheme: '',
-      liveType: '',
-      host: '',
-      celebrity: '',
-      productFeatures: '',
-      competitorAnalysis: '',
-      marketPosition: '',
-      // 更多信息字段
-      productName: '',
-      productSpec: '',
-      productPrice: '',
-      productDiscount: '',
-      liveSegmentDesign: '',
-      materialProps: '',
-      cpv: '',
-      productSellingPoints: '',
-      productDetailImages: ''
+  // 验证必填字段
+  const validateRequiredFields = useCallback((data: SingleProductFormData | GuestInteractionFormData | ProductSellingPointFormData) => {
+    // 产品列表验证由ProductList组件负责
+    if (!isProductListValid) {
+      return false;
+    }
+
+    if (activeTab === '单人推品') {
+      const singleData = data as SingleProductFormData;
+      return singleData.live_time.trim() !== '' && 
+             singleData.anchor_name.trim() !== '';
+    } else if (activeTab === '嘉宾互动') {
+      const guestData = data as GuestInteractionFormData;
+      return guestData.live_time.trim() !== '' && 
+             guestData.anchor_name.trim() !== '' &&
+             guestData.guests.trim() !== '';
+    } else if (activeTab === '商品卖点') {
+      const sellingData = data as ProductSellingPointFormData;
+      return sellingData.retail_price.trim() !== '';
+    }
+
+    return false;
+  }, [activeTab, isProductListValid]);
+
+  // 处理产品列表数据变化
+  const handleProductsChange = useCallback((products: Array<{id: string, product_id: string, product_name: string, product_price: string, product_spec: string, sellpoint: string}>) => {
+    // 拼接产品数据
+    const joinedData = {
+      product_id: products.map(p => p.product_id).filter(id => id.trim() !== '').join(';'),
+      product_name: products.map(p => p.product_name).filter(name => name.trim() !== '').join(';'),
+      product_price: products.map(p => p.product_price).filter(price => price.trim() !== '').join(';'),
+      product_spec: products.map(p => p.product_spec).filter(spec => spec.trim() !== '').join(';'),
+      sellpoint: products.map(p => p.sellpoint).filter(point => point.trim() !== '').join(';')
     };
-    const newProducts = [...products, newProduct];
-    setProducts(newProducts);
-    onDataChange?.({ formData, products: newProducts });
-  };
 
-  const handleRemoveProduct = (productId: string) => {
-    if (products.length > 1) {
-      const newProducts = products.filter(product => product.id !== productId);
-      setProducts(newProducts);
-      onDataChange?.({ formData, products: newProducts });
+    // 更新表单数据
+    if (activeTab === '单人推品') {
+      setSingleProductData(prev => ({ ...prev, ...joinedData }));
+    } else if (activeTab === '嘉宾互动') {
+      setGuestInteractionData(prev => ({ ...prev, ...joinedData }));
+    } else if (activeTab === '商品卖点') {
+      setSellingPointData(prev => ({ ...prev, ...joinedData }));
     }
-  };
+  }, [activeTab]);
 
-  const toggleMoreInfo = (productId: string) => {
-    const newExpanded = new Set(expandedProducts);
-    if (newExpanded.has(productId)) {
-      newExpanded.delete(productId);
-    } else {
-      newExpanded.add(productId);
+  // 使用useCallback优化性能
+  const handleDataChange = useCallback((data: SingleProductFormData | GuestInteractionFormData | ProductSellingPointFormData) => {
+    onDataChange?.(data);
+    
+    // 验证数据并通知父组件
+    const isValid = validateRequiredFields(data);
+    onValidationChange?.(isValid);
+  }, [onDataChange, onValidationChange, validateRequiredFields]);
+
+  // 使用useEffect来批量更新，减少频繁调用
+  useEffect(() => {
+    if (activeTab === '单人推品') {
+      handleDataChange(singleProductData);
+    } else if (activeTab === '嘉宾互动') {
+      handleDataChange(guestInteractionData);
+    } else if (activeTab === '商品卖点') {
+      handleDataChange(sellingPointData);
     }
-    setExpandedProducts(newExpanded);
-  };
+  }, [activeTab, singleProductData, guestInteractionData, sellingPointData, handleDataChange]);
 
-  // Date picker component
-  const DatePicker = ({ value, onValueChange, placeholder }: { 
-    value: string, 
-    onValueChange: (value: string) => void, 
-    placeholder: string 
-  }) => {
-    const [date, setDate] = useState<Date | undefined>(
-      value ? new Date(value) : undefined
+  // 处理triggerValidation
+  useEffect(() => {
+    if (triggerValidation) {
+      const currentData = activeTab === '单人推品' ? singleProductData : 
+                         activeTab === '嘉宾互动' ? guestInteractionData : 
+                         sellingPointData;
+      const isValid = validateRequiredFields(currentData);
+      onValidationChange?.(isValid);
+    }
+  }, [triggerValidation, activeTab, singleProductData, guestInteractionData, sellingPointData, validateRequiredFields, onValidationChange]);
+
+  const handleInputChange = useCallback((field: string, value: string) => {
+    if (activeTab === '单人推品') {
+      setSingleProductData(prev => ({ ...prev, [field]: value }));
+    } else if (activeTab === '嘉宾互动') {
+      setGuestInteractionData(prev => ({ ...prev, [field]: value }));
+    } else if (activeTab === '商品卖点') {
+      setSellingPointData(prev => ({ ...prev, [field]: value }));
+    }
+  }, [activeTab]);
+
+
+
+
+
+
+
+    // 渲染必填产品基础信息
+  const renderRequiredProductFields = () => {
+    return (
+      <ProductList
+        ref={productListRef}
+        onProductsChange={handleProductsChange}
+        onValidationChange={setIsProductListValid}
+      />
     );
+  };
+
+  // 渲染直播信息（单人推品和嘉宾互动）
+  const renderLiveInfo = () => {
+    if (activeTab === '商品卖点') return null;
+
+    const currentData = activeTab === '单人推品' ? singleProductData : guestInteractionData;
 
     return (
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            className={cn(
-              "w-full justify-start text-left font-normal bg-white",
-              !date && "text-muted-foreground"
-            )}
-          >
-            <CalendarIcon className="mr-2 h-4 w-4" />
-            {date ? format(date, "yyyy/MM/dd") : <span>{placeholder}</span>}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0">
-          <Calendar
-            mode="single"
-            selected={date}
-            onSelect={(selectedDate) => {
-              setDate(selectedDate);
-              if (selectedDate) {
-                onValueChange(format(selectedDate, "yyyy-MM-dd"));
-              }
-            }}
-            initialFocus
-          />
-        </PopoverContent>
-      </Popover>
+      <div className="bg-white border-2 border-cyan-500 rounded-lg p-6 shadow-sm">
+        <h3 className="text-lg font-semibold text-cyan-700 mb-4 flex items-center">
+          <Video className="w-5 h-5 text-cyan-600 mr-3" />
+          直播信息
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              直播时间 <span className="text-red-500">*</span>
+            </label>
+            <Calendar24
+              value={currentData.live_time}
+              onValueChange={(value) => handleInputChange('live_time', value)}
+              placeholder="选择直播时间"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              主持人名称 <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={currentData.anchor_name}
+              onChange={(e) => handleInputChange('anchor_name', e.target.value)}
+              placeholder="请输入主持人名称"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 hover:border-cyan-400 transition-all duration-200"
+            />
+          </div>
+          {activeTab === '嘉宾互动' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                明星嘉宾信息 <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={(guestInteractionData as GuestInteractionFormData).guests}
+                onChange={(e) => handleInputChange('guests', e.target.value)}
+                placeholder="请输入明星嘉宾信息，如：杨幂、迪丽热巴"
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 hover:border-cyan-400 transition-all duration-200"
+              />
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              品牌名称
+            </label>
+            <input
+              type="text"
+              value={currentData.brand_name}
+              onChange={(e) => handleInputChange('brand_name', e.target.value)}
+              placeholder="请输入品牌名称，如：兰蔻、雅诗兰黛"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 hover:border-cyan-400 transition-all duration-200"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              直播主题
+            </label>
+            <input
+              type="text"
+              value={currentData.live_topic}
+              onChange={(e) => handleInputChange('live_topic', e.target.value)}
+              placeholder="请输入直播主题，如：冬季护肤好搭子"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 hover:border-cyan-400 transition-all duration-200"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              直播类型
+            </label>
+            <Select value={currentData.live_type} onValueChange={(value) => handleInputChange('live_type', value)}>
+              <SelectTrigger className="bg-white focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 h-[42px] px-3 py-2.5 border border-gray-300 rounded-lg hover:border-cyan-400 transition-all duration-200">
+                <SelectValue placeholder="选择直播类型" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="大促推品">大促推品</SelectItem>
+                <SelectItem value="新品发布">新品发布</SelectItem>
+                <SelectItem value="日常推广">日常推广</SelectItem>
+                <SelectItem value="专场直播">专场直播</SelectItem>
+                <SelectItem value="爆款返场">爆款返场</SelectItem>
+                <SelectItem value="清仓特卖">清仓特卖</SelectItem>
+                <SelectItem value="工厂溯源">工厂溯源</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              直播环节
+            </label>
+            <textarea
+              value={currentData.sessions}
+              onChange={(e) => handleInputChange('sessions', e.target.value)}
+              placeholder="请输入直播环节设计，如：1.开场福利红包、2.产品介绍 3.实验演绎 4.互动环节 5.结尾"
+              rows={3}
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 hover:border-cyan-400 transition-all duration-200 resize-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              道具
+            </label>
+            <input
+              type="text"
+              value={currentData.props}
+              onChange={(e) => handleInputChange('props', e.target.value)}
+              placeholder="请输入道具清单，如：产品样品、玻璃杯、kt板"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 hover:border-cyan-400 transition-all duration-200"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              用户画像
+            </label>
+            <input
+              type="text"
+              value={currentData.user_portrait}
+              onChange={(e) => handleInputChange('user_portrait', e.target.value)}
+              placeholder="请输入目标用户画像，如：25-35岁女性，注重护肤"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 hover:border-cyan-400 transition-all duration-200"
+            />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // 渲染价格信息（商品卖点）
+  const renderPriceInfo = () => {
+    if (activeTab !== '商品卖点') return null;
+
+    return (
+      <div className="bg-white border-2 border-orange-400 rounded-lg p-6 shadow-sm">
+        <h3 className="text-lg font-semibold text-orange-700 mb-4 flex items-center">
+          <Info className="w-5 h-5 text-orange-600 mr-3" />
+          其他信息
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              市场价 <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={sellingPointData.retail_price}
+              onChange={(e) => handleInputChange('retail_price', e.target.value)}
+              placeholder="请输入市场价"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 hover:border-orange-400 transition-all duration-200"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              折扣
+            </label>
+            <input
+              type="text"
+              value={sellingPointData.discount}
+              onChange={(e) => handleInputChange('discount', e.target.value)}
+              placeholder="请输入折扣信息，如：叠平台199-35券+单品3元券"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 hover:border-orange-400 transition-all duration-200"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              优惠机制
+            </label>
+            <input
+              type="text"
+              value={sellingPointData.mechanism}
+              onChange={(e) => handleInputChange('mechanism', e.target.value)}
+              placeholder="请输入优惠机制，如：详情页领券"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 hover:border-orange-400 transition-all duration-200"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              物流信息
+            </label>
+            <input
+              type="text"
+              value={sellingPointData.logistics}
+              onChange={(e) => handleInputChange('logistics', e.target.value)}
+              placeholder="请输入物流信息，如：顺丰包邮，48小时发货"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 hover:border-orange-400 transition-all duration-200"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              生产日期
+            </label>
+            <input
+              type="text"
+              value={sellingPointData.pr_date}
+              onChange={(e) => handleInputChange('pr_date', e.target.value)}
+              placeholder="请输入生产日期，如：2024-01-15"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 hover:border-orange-400 transition-all duration-200"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              品牌信息
+            </label>
+            <input
+              type="text"
+              value={sellingPointData.brand_info}
+              onChange={(e) => handleInputChange('brand_info', e.target.value)}
+              placeholder="请输入品牌信息，如：法国兰蔻，专注护肤30年"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 hover:border-orange-400 transition-all duration-200"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              展示方式
+            </label>
+            <input
+              type="text"
+              value={sellingPointData.display}
+              onChange={(e) => handleInputChange('display', e.target.value)}
+              placeholder="请输入展示方式，如：真人试用、实验对比"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 hover:border-orange-400 transition-all duration-200"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              介绍
+            </label>
+            <textarea
+              value={sellingPointData.intro}
+              onChange={(e) => handleInputChange('intro', e.target.value)}
+              placeholder="请输入产品介绍，如：这款精华液含有玻尿酸成分，能够深层补水保湿"
+              rows={3}
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 hover:border-orange-400 transition-all duration-200 resize-none"
+            />
+          </div>
+        </div>
+      </div>
     );
   };
 
   return (
-    <div>
-      {/* 合并的产品信息和直播信息卡片 */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <div className="flex items-start mb-6">
-          <div className="flex items-center space-x-4">
-            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#474747" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/><path d="m9 9.5 2 2 4-4"/></svg>
-            </div>
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">必填信息</h2>
-              <p className="text-sm text-gray-500 mt-1">以下信息为生成脚本必须填写的必要信息</p>
-            </div>
+    <div className="flex justify-center items-start min-h-screen py-8">
+      <div className="w-full max-w-6xl space-y-6">
+      {/* 标题和描述 */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center space-x-4 mb-6">
+          <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center">
+            {activeTab === '单人推品' && <Speech className="w-6 h-6 text-white" />}
+            {activeTab === '嘉宾互动' && <Drum className="w-6 h-6 text-white" />}
+            {activeTab === '商品卖点' && <ShoppingCart className="w-6 h-6 text-white" />}
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">
+              {activeTab === '单人推品' && '单人推品脚本信息'}
+              {activeTab === '嘉宾互动' && '嘉宾互动脚本信息'}
+              {activeTab === '商品卖点' && '商品卖点脚本信息'}
+            </h2>
+            <p className="text-sm text-gray-500 mt-1">
+              {activeTab === '单人推品' && '请填写单人推品脚本生成所需的信息，带*的为必填项，填写选填信息可以提升大模型生成脚本的准确性😊'}
+              {activeTab === '嘉宾互动' && '请填写嘉宾互动脚本生成所需的信息，带*的为必填项，填写选填信息可以提升大模型生成脚本的准确性😊'}
+              {activeTab === '商品卖点' && '请填写商品卖点脚本生成所需的信息，带*的为必填项，填写选填信息可以提升大模型生成脚本的准确性😊'}
+            </p>
           </div>
         </div>
-        <div className={`flex flex-col gap-6 ${(activeTab === '明星互动脚本' || activeTab === '单人商品讲解') ? 'lg:flex-row lg:items-stretch' : ''}`}>
-          
-          {/* 产品信息部分 */}
-          <div className={`${(activeTab === '明星互动脚本' || activeTab === '单人商品讲解') ? 'lg:w-3/5' : 'w-full'} flex flex-col`}>
-            <div className="bg-green-50 rounded-xl p-6 flex-1 overflow-hidden flex flex-col" style={{ minHeight: '400px' }}>
-              <div className="flex items-center space-x-2 mb-4">
-                <span className="text-lg font-medium text-green-600">产品信息</span>
-                <button 
-                  onClick={handleAddProduct}
-                  className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-md text-xs font-medium ml-auto transition-colors duration-200 cursor-pointer"
-                >
-                  + 添加产品
-                </button>
-              </div>
-              
-              {/* 产品列表容器 - 带滚动 */}
-              <div className="flex-1 overflow-y-auto pr-2 pb-1" style={{ maxHeight: 'calc(100vh - 400px)', minHeight: '400px' }}>
-                <div className="space-y-4">
-                {products.map((product, index) => (
-                  <div key={product.id} className="bg-white rounded-xl p-4 shadow-sm">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                        <span className="text-sm font-medium text-gray-700">产品{index + 1}</span>
-                      </div>
-                      {products.length > 1 && (
-                        <button
-                          onClick={() => handleRemoveProduct(product.id)}
-                          className="text-red-500 hover:text-red-700 text-xs font-medium transition-colors duration-200 cursor-pointer"
-                        >
-                          删除
-                        </button>
-                      )}
-                    </div>
-                    
-                    {activeTab === '商品卖点收集' ? (
-                      // 商品卖点收集的产品信息表单
-                      <div className="grid grid-cols-1 gap-4">
-                        <div>
-                          <label className="block text-sm text-gray-600 mb-2">产品名称 *</label>
-                          <input
-                            type="text"
-                            placeholder="请输入产品名称"
-                            value={product.brandName}
-                            onChange={(e) => handleProductChange(product.id, 'brandName', e.target.value)}
-                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm text-gray-600 mb-2">产品特色功能 *</label>
-                          <textarea
-                            placeholder="请输入产品的核心功能和特色"
-                            value={product.productFeatures}
-                            onChange={(e) => handleProductChange(product.id, 'productFeatures', e.target.value)}
-                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent h-24 resize-none"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm text-gray-600 mb-2">竞品分析 *</label>
-                          <textarea
-                            placeholder="请输入与竞品相比的优势"
-                            value={product.competitorAnalysis}
-                            onChange={(e) => handleProductChange(product.id, 'competitorAnalysis', e.target.value)}
-                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent h-24 resize-none"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm text-gray-600 mb-2">市场定位 *</label>
-                          <input
-                            type="text"
-                            placeholder="请输入产品市场定位"
-                            value={product.marketPosition}
-                            onChange={(e) => handleProductChange(product.id, 'marketPosition', e.target.value)}
-                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      // 明星互动脚本和单人商品讲解的产品信息表单
-                      <div >
-                        {/* 必填字段 */}
-                        <div className="mb-4">
-                          <h4 className="text-sm font-medium  text-green-600 mb-3 flex items-center">
-                            必填信息
-                          </h4>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <label className="block text-sm text-gray-600 mb-2">产品ID *</label>
-                              <input
-                                type="text"
-                                placeholder="请输入产品ID"
-                                value={product.productId}
-                                onChange={(e) => handleProductChange(product.id, 'productId', e.target.value)}
-                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm text-gray-600 mb-2">产品价格 *</label>
-                              <input
-                                type="text"
-                                placeholder="请输入产品价格"
-                                value={product.productPrice || ''}
-                                onChange={(e) => handleProductChange(product.id, 'productPrice', e.target.value)}
-                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                              />
-                            </div>
-                            <div className="col-span-2">
-                              <label className="block text-sm text-gray-600 mb-2">产品折扣 *</label>
-                              <input
-                                type="text"
-                                placeholder="请输入产品折扣"
-                                value={product.productDiscount || ''}
-                                onChange={(e) => handleProductChange(product.id, 'productDiscount', e.target.value)}
-                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                              />
-                            </div>
-                          </div>
-                        </div>
 
-                        {/* 选填字段 */}
-                        <div>
-                          <button 
-                            onClick={() => toggleMoreInfo(product.id)}
-                            className="flex items-center space-x-2 text-green-600 text-sm font-medium hover:text-green-700 transition-colors cursor-pointer mb-3"
-                          >
-                            <svg 
-                              className={`w-4 h-4 transition-transform duration-200 ${expandedProducts.has(product.id) ? 'rotate-90' : ''}`}
-                              fill="none" 
-                              stroke="currentColor" 
-                              viewBox="0 0 24 24"
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                            </svg>
-                            <span className='text-gray-500'>
-                              {expandedProducts.has(product.id) ? '收起选填信息' : '展开选填信息'}
-                            </span>
-                          </button>
-                          
-                          {expandedProducts.has(product.id) && (
-                            <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg space-y-4">
-                              <div>
-                                <label className="block text-sm text-gray-600 mb-2">产品卖点</label>
-                                <textarea
-                                  placeholder="请输入产品卖点"
-                                  value={product.productSellingPoints || ''}
-                                  onChange={(e) => handleProductChange(product.id, 'productSellingPoints', e.target.value)}
-                                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent h-24 resize-none"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm text-gray-600 mb-2">商详图片</label>
-                                <div className="flex items-center space-x-3">
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    multiple
-                                    className="hidden"
-                                    id={`upload-${product.id}`}
-                                    onChange={(e) => {
-                                      // 这里可以处理图片上传逻辑
-                                      const files = Array.from(e.target.files || []);
-                                      const fileNames = files.map(file => file.name).join(', ');
-                                      handleProductChange(product.id, 'productDetailImages', fileNames);
-                                    }}
-                                  />
-                                  <label
-                                    htmlFor={`upload-${product.id}`}
-                                    className="cursor-pointer bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
-                                  >
-                                    上传图片
-                                  </label>
-                                  <span className="text-sm text-gray-500">
-                                    {product.productDetailImages || '未选择文件'}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 直播信息部分 - 只有明星互动脚本和单人商品讲解有 */}
-          {(activeTab === '明星互动脚本' || activeTab === '单人商品讲解') && (
-            <div className="lg:w-2/5 flex flex-col">
-              <div className="bg-sky-50  rounded-xl p-6 flex-1 overflow-hidden flex flex-col" style={{ minHeight: '400px' }}>
-                <div className="flex items-center space-x-2 mb-6">
-                  <span className="text-lg font-medium text-green-600">直播信息</span>
-                </div>
-                
-                {/* 必填字段 */}
-                <div className="mb-6">
-                  <h4 className="text-sm font-medium text-green-600 mb-3 flex items-center">
-                    必填信息
-                  </h4>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm text-gray-600 mb-2">直播时间 *</label>
-                      <DatePicker
-                        value={formData.liveDate}
-                        onValueChange={(value) => handleInputChange('liveDate', value)}
-                        placeholder="年/月/日"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-600 mb-2">直播主题 *</label>
-                      <input
-                        type="text"
-                        placeholder="请输入直播主题"
-                        value={formData.liveTopicRight}
-                        onChange={(e) => handleInputChange('liveTopicRight', e.target.value)}
-                        className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-600 mb-2">直播类型 *</label>
-                      <Select value={formData.liveTypeRight} onValueChange={(value) => handleInputChange('liveTypeRight', value)}>
-                        <SelectTrigger className="w-full bg-white">
-                          <SelectValue placeholder="请选择直播类型" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="商品直播">商品直播</SelectItem>
-                          <SelectItem value="品牌宣传">品牌宣传</SelectItem>
-                          <SelectItem value="新品发布">新品发布</SelectItem>
-                          <SelectItem value="促销活动">促销活动</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-600 mb-2">主持人 *</label>
-                      <input
-                        type="text"
-                        placeholder="请输入主持人名称"
-                        value={formData.hostName}
-                        onChange={(e) => handleInputChange('hostName', e.target.value)}
-                        className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      />
-                    </div>
-                    {activeTab === '明星互动脚本' && (
-                      <div>
-                        <label className="block text-sm text-gray-600 mb-2">明星嘉宾 *</label>
-                        <input
-                          type="text"
-                          placeholder="请输入明星嘉宾"
-                          value={formData.celebrity}
-                          onChange={(e) => handleInputChange('celebrity', e.target.value)}
-                          className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* 选填字段 */}
-                <div className="flex-1 overflow-y-auto">
-                  <details className="group">
-                    <summary className="flex items-center space-x-2 text-blue-600 text-sm font-medium hover:text-blue-700 transition-colors cursor-pointer list-none">
-                      <svg 
-                        className="w-4 h-4 transition-transform duration-200 group-open:rotate-90"
-                        fill="none" 
-                        stroke="currentColor" 
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                      <span className='text-gray-500'>选填信息</span>
-                    </summary>
-                    
-                    <div className="mt-3 p-4 bg-white border border-gray-200 rounded-lg space-y-4">
-                      <div>
-                        <label className="block text-sm text-gray-600 mb-2">直播环节设计</label>
-                        <textarea
-                          placeholder="请输入直播环节设计"
-                          value={formData.liveSegmentDesign || ''}
-                          onChange={(e) => handleInputChange('liveSegmentDesign', e.target.value)}
-                          className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent h-24 resize-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm text-gray-600 mb-2">物料道具</label>
-                        <textarea
-                          placeholder="请输入物料道具"
-                          value={formData.materialProps || ''}
-                          onChange={(e) => handleInputChange('materialProps', e.target.value)}
-                          className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent h-24 resize-none"
-                        />
-                      </div>
-                    </div>
-                  </details>
-                </div>
-              </div>
-            </div>
-          )}
+        {/* 产品信息 */}
+        <div className="mb-8">
+          {renderRequiredProductFields()}
         </div>
+
+        {/* 直播信息 */}
+        <div className="mb-8">
+          {renderLiveInfo()}
+        </div>
+
+        {/* 价格信息 */}
+        <div>
+          {renderPriceInfo()}
+        </div>
+      </div>
       </div>
     </div>
   );

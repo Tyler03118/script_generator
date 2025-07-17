@@ -11,4 +11,14 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  server: {
+    proxy: {
+      '/pyinfer_tao_pre': {
+        target: 'https://tppwork.taobao.com',
+        changeOrigin: true,
+        rewrite: path => path.replace(/^\/pyinfer_tao_pre/, '/pyinfer_tao_pre'),
+        secure: false,
+      },
+    },
+  },
 })

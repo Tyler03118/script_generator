@@ -1,31 +1,37 @@
 interface ProgressIndicatorProps {
-  currentStep: number;
+  isFormComplete: boolean;
+  isScriptGenerated: boolean;
 }
 
-export default function ProgressIndicator({ currentStep }: ProgressIndicatorProps) {
+export default function ProgressIndicator({ isFormComplete, isScriptGenerated }: ProgressIndicatorProps) {
   const steps = [
-    { number: 1, title: '模版选择', completed: currentStep >= 1 },
-    { number: 2, title: '基础信息', completed: currentStep >= 2 },
-    { number: 3, title: '生成脚本', completed: currentStep >= 3 }
+    { 
+      number: 1, 
+      title: '填写脚本信息', 
+      completed: isFormComplete 
+    },
+    { 
+      number: 2, 
+      title: '生成脚本', 
+      completed: isScriptGenerated 
+    }
   ];
 
   return (
     <div className="fixed left-8 top-1/2 transform -translate-y-1/2 z-10">
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 w-32">
+      <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 w-36">
         <div className="space-y-6">
           {steps.map((step, index) => (
             <div key={step.number} className="flex flex-col items-center">
               <div
-                className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm transition-all duration-300 ${
+                className={`w-12 h-12 rounded-full flex items-center justify-center font-semibold text-sm transition-all duration-300 ${
                   step.completed
-                    ? 'bg-green-500 text-white'
-                    : currentStep === step.number
-                    ? 'bg-green-100 text-green-600 ring-2 ring-green-500'
-                    : 'bg-gray-100 text-gray-400'
+                    ? 'bg-green-500 text-white shadow-lg'
+                    : 'bg-white text-gray-400 border-2 border-gray-200'
                 }`}
               >
-                {step.completed && currentStep > step.number ? (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {step.completed ? (
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                 ) : (
@@ -38,9 +44,11 @@ export default function ProgressIndicator({ currentStep }: ProgressIndicatorProp
                 {step.title}
               </span>
               {index < steps.length - 1 && (
-                <div className={`w-0.5 h-8 mt-2 ${
-                  step.completed ? 'bg-green-500' : 'bg-gray-200'
-                }`} />
+                <div 
+                  className={`w-0.5 h-8 mt-2 ${
+                    step.completed ? 'bg-green-500' : 'bg-gray-200'
+                  }`}
+                />
               )}
             </div>
           ))}

@@ -1,198 +1,130 @@
-import { useState } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import TopSelector from './components/TopSelector'
 import ProgressIndicator from './components/ProgressIndicator'
-import AITemplateRecommendation from './components/AITemplateRecommendation'
 import RequiredInfoForm from './components/RequiredInfoForm'
 import GenerateButton from './components/GenerateButton'
-import type { FormData } from './types'
-
-interface Product {
-  id: string;
-  productId: string;
-  brandName: string;
-  liveTime: string;
-  liveTheme: string;
-  liveType: string;
-  host: string;
-  celebrity: string;
-  productFeatures: string;
-  competitorAnalysis: string;
-  marketPosition: string;
-  // 更多信息字段
-  productName: string;
-  productSpec: string;
-  productPrice: string;
-  productDiscount: string;
-  liveSegmentDesign: string;
-  materialProps: string;
-  cpv: string;
-  productSellingPoints: string;
-  productDetailImages: string;
-}
+import type { ScriptType, SingleProductFormData, GuestInteractionFormData, ProductSellingPointFormData, APIRequestData } from './types'
+import { generateLiveScript } from './services/api';
 
 function App() {
-  const [activeTab, setActiveTab] = useState('单人商品讲解')
-  const [templateType, setTemplateType] = useState('')
-  const [currentStep, setCurrentStep] = useState(1)
+  const [activeTab, setActiveTab] = useState<ScriptType>('单人推品')
   const [isGenerating, setIsGenerating] = useState(false)
-  const [products, setProducts] = useState<Product[]>([
-    {
-      id: '1',
-      productId: '',
-      brandName: '',
-      liveTime: '',
-      liveTheme: '',
-      liveType: '',
-      host: '',
-      celebrity: '',
-      productFeatures: '',
-      competitorAnalysis: '',
-      marketPosition: '',
-      // 更多信息字段
-      productName: '',
-      productSpec: '',
-      productPrice: '',
-      productDiscount: '',
-      liveSegmentDesign: '',
-      materialProps: '',
-      cpv: '',
-      productSellingPoints: '',
-      productDetailImages: ''
-    }
-  ])
-  const [formData, setFormData] = useState<FormData>({
-    productId: '',
-    brandName: '',
-    liveTime: '',
-    liveTheme: '',
-    liveType: '',
-    host: '',
-    celebrity: '',
-    liveDate: '',
-    hostName: '',
-    liveTopicRight: '',
-    liveTypeRight: '',
-    targetAudience: '',
-    productFeatures: '',
-    competitorAnalysis: '',
-    marketPosition: ''
-  })
+  const [isScriptGenerated, setIsScriptGenerated] = useState(false)
+  const [isFormValid, setIsFormValid] = useState(false)
+  const [triggerValidation, setTriggerValidation] = useState(false)
+  
+  // 当前表单数据
+  const [formData, setFormData] = useState<SingleProductFormData | GuestInteractionFormData | ProductSellingPointFormData | null>(null)
+  
+  // 使用ref来避免循环依赖
+  const lastFormDataRef = useRef<string>('')
+  const lastValidationRef = useRef<boolean>(false)
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData((prev: FormData) => ({
-      ...prev,
-      [field]: value
-    }))
+  const handleDataChange = useCallback((data: SingleProductFormData | GuestInteractionFormData | ProductSellingPointFormData) => {
+    const dataString = JSON.stringify(data)
     
-    // 自动更新步骤进度
-    if (templateType && Object.values(formData).some((val: string) => val.trim() !== '')) {
-      setCurrentStep(2)
+    // 只有当数据真正改变时才更新状态
+    if (dataString !== lastFormDataRef.current) {
+      lastFormDataRef.current = dataString
+      setFormData(data)
+      
+      // 切换脚本类型时重置生成状态
+      if (isScriptGenerated) {
+        setIsScriptGenerated(false)
+      }
     }
-  }
+  }, [isScriptGenerated])
 
-  const handleProductChange = (productId: string, field: string, value: string) => {
-    setProducts(prev => prev.map(product => 
-      product.id === productId 
-        ? { ...product, [field]: value }
-        : product
-    ))
-  }
-
-  const handleAddProduct = () => {
-    const newProduct: Product = {
-      id: Date.now().toString(),
-      productId: '',
-      brandName: '',
-      liveTime: '',
-      liveTheme: '',
-      liveType: '',
-      host: '',
-      celebrity: '',
-      productFeatures: '',
-      competitorAnalysis: '',
-      marketPosition: '',
-      // 更多信息字段
-      productName: '',
-      productSpec: '',
-      productPrice: '',
-      productDiscount: '',
-      liveSegmentDesign: '',
-      materialProps: '',
-      cpv: '',
-      productSellingPoints: '',
-      productDetailImages: ''
+  const handleValidationChange = useCallback((isValid: boolean) => {
+    // 只有当验证状态真正改变时才更新
+    if (isValid !== lastValidationRef.current) {
+      lastValidationRef.current = isValid
+      setIsFormValid(isValid)
     }
-    setProducts(prev => [...prev, newProduct])
-  }
+  }, [])
 
-  const handleRemoveProduct = (productId: string) => {
-    if (products.length > 1) {
-      setProducts(prev => prev.filter(product => product.id !== productId))
-    }
-  }
+  const handleTabChange = useCallback((tab: ScriptType) => {
+    setActiveTab(tab)
+    setFormData(null) // 切换类型时清空表单数据
+    setIsScriptGenerated(false) // 重置生成状态
+    setIsFormValid(false) // 重置验证状态
+    setTriggerValidation(false) // 重置触发验证状态
+    
+    // 重置ref
+    lastFormDataRef.current = ''
+    lastValidationRef.current = false
+  }, [])
 
-  const handleTemplateChange = (value: string) => {
-    setTemplateType(value)
-    if (value) {
-      setCurrentStep(2)
-    }
-  }
-
-  const handleGenerate = async () => {
+  const handleGenerate = useCallback(async () => {
     setIsGenerating(true)
-    setCurrentStep(3)
-    
-    // 模拟API调用
     try {
-      await new Promise(resolve => setTimeout(resolve, 3000))
-      // 这里可以添加实际的API调用逻辑
-      console.log('生成脚本:', { activeTab, templateType, formData })
+      // 构建API请求数据
+      const requestData: APIRequestData = {
+        script_type: activeTab,
+        ...formData
+      }
+      // 参数校验
+      if (!requestData.script_type || !requestData.product_name) {
+        console.error('参数缺失: script_type 或 product_name');
+        alert('参数缺失: script_type 或 product_name');
+        setIsGenerating(false);
+        return;
+      }
+      // 调用API并打印所有流式response
+      await generateLiveScript(requestData, (response) => {
+        console.log('API流式响应:', response);
+      });
+      setIsScriptGenerated(true)
     } catch (error) {
       console.error('生成失败:', error)
+      alert('生成失败，请重试')
     } finally {
       setIsGenerating(false)
     }
-  }
+  }, [formData, activeTab])
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* 进度指示器 */}
-      <ProgressIndicator currentStep={currentStep} />
+      <ProgressIndicator 
+        isFormComplete={isFormValid}
+        isScriptGenerated={isScriptGenerated}
+      />
       
       {/* 顶部选项卡 */}
-      <TopSelector activeTab={activeTab} onTabChange={setActiveTab} />
+      <TopSelector activeTab={activeTab} onTabChange={handleTabChange} />
 
-      {/* 主体内容 - 居中对齐 */}
-      <div className="flex justify-center">
-        <div className="max-w-4xl w-full px-6 py-8 ml-32">
-          {/* AI模版推荐 - 上方 */}
-          <div className="mb-8">
-            <AITemplateRecommendation 
-              templateType={templateType}
-              onTemplateChange={handleTemplateChange}
-            />
-          </div>
-
-          {/* 必填信息表单 - 下方 */}
-          <div className="mb-8">
+      {/* 主体内容 - 恢复左侧边距 */}
+      <div className="container mx-auto px-4 py-8 ml-32">
+        <div className="max-w-6xl mx-auto">
+          {/* 必填信息表单 */}
+          <div className="mb-12">
             <RequiredInfoForm
               activeTab={activeTab}
-              formData={formData}
-              products={products}
-              onInputChange={handleInputChange}
-              onProductChange={handleProductChange}
-              onAddProduct={handleAddProduct}
-              onRemoveProduct={handleRemoveProduct}
+              onDataChange={handleDataChange}
+              onValidationChange={handleValidationChange}
+              triggerValidation={triggerValidation}
             />
           </div>
 
           {/* 生成按钮 */}
-          <GenerateButton 
-            onGenerate={handleGenerate}
-            isLoading={isGenerating}
-          />
+          <div className="flex justify-center">
+            <GenerateButton 
+              onGenerate={handleGenerate}
+              isLoading={isGenerating}
+              isFormValid={isFormValid}
+              formData={formData}
+            />
+          </div>
         </div>
       </div>
+
+      {/* 底部版权信息 */}
+      <footer className="text-center py-6 mt-4">
+        <p className="text-gray-500 text-sm">
+          Powered by 自营技术-消费技术-直播 & AI应用
+        </p>
+      </footer>
     </div>
   )
 }
