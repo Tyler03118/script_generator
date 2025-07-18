@@ -97,6 +97,19 @@ export default function RequiredInfoForm({
     intro: ''
   });
 
+  // 处理品牌信息更新
+  const handleBrandInfoUpdate = useCallback((brandInfo: string) => {
+    if (activeTab === '单人推品') {
+      setSingleProductData(prev => ({ ...prev, brand_name: brandInfo }));
+    } else if (activeTab === '嘉宾互动') {
+      setGuestInteractionData(prev => ({ ...prev, brand_name: brandInfo }));
+    } else if (activeTab === '商品卖点') {
+      setSellingPointData(prev => ({ ...prev, brand_info: brandInfo }));
+    }
+    
+    console.log(`✅ 品牌信息已更新到${activeTab}脚本的品牌信息字段`);
+  }, [activeTab]);
+
   // 验证必填字段
   const validateRequiredFields = useCallback((data: SingleProductFormData | GuestInteractionFormData | ProductSellingPointFormData) => {
     // 产品列表验证由ProductList组件负责
@@ -183,12 +196,6 @@ export default function RequiredInfoForm({
     }
   }, [activeTab]);
 
-
-
-
-
-
-
     // 渲染必填产品基础信息
   const renderRequiredProductFields = () => {
     return (
@@ -196,6 +203,7 @@ export default function RequiredInfoForm({
         ref={productListRef}
         onProductsChange={handleProductsChange}
         onValidationChange={setIsProductListValid}
+        onBrandInfoUpdate={handleBrandInfoUpdate}
       />
     );
   };
@@ -249,16 +257,16 @@ export default function RequiredInfoForm({
               />
             </div>
           )}
-          <div>
+          <div className={activeTab === '嘉宾互动' ? '' : 'md:col-span-2'}>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              品牌名称
+              品牌信息
             </label>
-            <input
-              type="text"
+            <textarea
               value={currentData.brand_name}
               onChange={(e) => handleInputChange('brand_name', e.target.value)}
-              placeholder="请输入品牌名称，如：兰蔻、雅诗兰黛"
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 hover:border-cyan-400 transition-all duration-200"
+              placeholder="请输入品牌信息，如：兰蔻1935年诞生于法国，作为全球知名的高端化妆品品牌..."
+              rows={3}
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 hover:border-cyan-400 transition-all duration-200 resize-none"
             />
           </div>
           <div>
@@ -410,12 +418,12 @@ export default function RequiredInfoForm({
             <label className="block text-sm font-medium text-gray-700 mb-2">
               品牌信息
             </label>
-            <input
-              type="text"
+            <textarea
               value={sellingPointData.brand_info}
               onChange={(e) => handleInputChange('brand_info', e.target.value)}
-              placeholder="请输入品牌信息，如：法国兰蔻，专注护肤30年"
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 hover:border-orange-400 transition-all duration-200"
+              placeholder="请输入品牌信息，如：兰蔻1935年诞生于法国，作为全球知名的高端化妆品品牌..."
+              rows={3}
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 hover:border-orange-400 transition-all duration-200 resize-none"
             />
           </div>
           <div>
@@ -490,4 +498,4 @@ export default function RequiredInfoForm({
       </div>
     </div>
   );
-} 
+}

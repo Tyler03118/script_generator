@@ -1,6 +1,7 @@
 import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Plus, Trash2, Package } from 'lucide-react';
 import SearchButton from './SearchButton';
+import { queryIGraphInfo } from '../services/api';
 
 interface Product {
   id: string;
@@ -14,6 +15,7 @@ interface Product {
 interface ProductListProps {
   onProductsChange: (products: Product[]) => void;
   onValidationChange: (isValid: boolean) => void;
+  onBrandInfoUpdate?: (brandInfo: string) => void; // 新增：品牌信息更新回调
 }
 
 export interface ProductListRef {
@@ -26,7 +28,7 @@ export interface ProductListRef {
   };
 }
 
-const ProductList = forwardRef<ProductListRef, ProductListProps>(({ onProductsChange, onValidationChange }, ref) => {
+const ProductList = forwardRef<ProductListRef, ProductListProps>(({ onProductsChange, onValidationChange, onBrandInfoUpdate }, ref) => {
   const [products, setProducts] = useState<Product[]>([
     { id: '1', product_id: '', product_name: '', product_price: '', product_spec: '', sellpoint: '' }
   ]);
@@ -73,6 +75,42 @@ const ProductList = forwardRef<ProductListRef, ProductListProps>(({ onProductsCh
     ));
   };
 
+  // 处理搜索到的产品信息
+  const handleProductInfoFound = (id: string) => (productInfo: {
+    product_name?: string;
+    product_price?: string;
+    brand_info?: string;
+    sellpoint?: string;
+  }) => {
+    // 更新当前产品的信息
+    const updateData: Partial<Product> = {};
+    
+    if (productInfo.product_name) {
+      updateData.product_name = productInfo.product_name;
+    }
+    
+    if (productInfo.product_price) {
+      updateData.product_price = productInfo.product_price;
+    }
+    
+    if (productInfo.sellpoint) {
+      updateData.sellpoint = productInfo.sellpoint;
+    }
+    
+    // 更新产品信息
+    setProducts(products.map(product =>
+      product.id === id ? { ...product, ...updateData } : product
+    ));
+    
+    // 传递品牌信息给父组件
+    if (productInfo.brand_info && onBrandInfoUpdate) {
+      onBrandInfoUpdate(productInfo.brand_info);
+    }
+    
+    console.log('✅ 产品信息自动填充成功');
+    alert(`🎉 产品信息已自动填充！\n商品名称: ${productInfo.product_name || '未获取到'}\n价格: ${productInfo.product_price || '未获取到'}\n品牌信息: ${productInfo.brand_info ? '已填充到品牌信息字段' : '未获取到'}`);
+  };
+
   // 拼接产品数据为字符串（用于最终提交）
   const getJoinedProductData = () => {
     return {
@@ -84,10 +122,59 @@ const ProductList = forwardRef<ProductListRef, ProductListProps>(({ onProductsCh
     };
   };
 
-  // 搜索产品历史信息
-  const handleSearchClick = (productId: string) => {
-    // 这里可以添加搜索逻辑
-    console.log('搜索产品ID:', productId);
+  // 搜索产品信息并自动填充
+  const handleSearchClick = async (productId: string, id: string) => {
+    if (!productId || productId.trim() === '') {
+      return; // SearchButton组件内部已经处理了空ID的情况
+    }
+
+    try {
+      const result = await queryIGraphInfo(productId);
+      
+      if (result.status === 'success' && result.data?.原始数据) {
+        const productData = result.data.原始数据;
+        
+        // 解析卖点信息
+        let sellingPointsText = '';
+        if (productData.selling_points) {
+          try {
+            const sellingPoints = JSON.parse(productData.selling_points);
+            sellingPointsText = Array.isArray(sellingPoints) ? sellingPoints.join('；') : productData.selling_points;
+          } catch (e) {
+            sellingPointsText = productData.selling_points;
+          }
+        }
+        
+        // 构造更新数据
+        const updateData: Partial<Product> = {};
+        
+        if (productData.item_name) {
+          updateData.product_name = productData.item_name;
+        }
+        
+        if (productData.discount_price) {
+          updateData.product_price = productData.discount_price;
+        } else if (productData.daily_price) {
+          updateData.product_price = productData.daily_price;
+        }
+        
+        if (sellingPointsText) {
+          updateData.sellpoint = sellingPointsText;
+        }
+        
+        // 自动填充产品信息
+        handleProductInfoFound(id)(updateData);
+        
+        console.log('✅ 产品信息自动填充成功');
+        alert(`🎉 产品信息已自动填充！\n商品名称: ${productData.item_name || '未获取到'}\n价格: ${productData.discount_price || productData.daily_price || '未获取到'}\n品牌信息: ${productData.brand_ext_info ? '已填充' : '未获取到'}`);
+        
+      } else if (result.status === 'error' || !result.data?.原始数据) {
+        alert('抱歉，该ID未查询到商品信息');
+      }
+    } catch (error) {
+      console.error('❌ 搜索失败:', error);
+      alert('搜索失败，请稍后重试');
+    }
   };
 
   // 暴露方法给父组件
@@ -142,7 +229,8 @@ const ProductList = forwardRef<ProductListRef, ProductListProps>(({ onProductsCh
                     className="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 hover:border-green-400 transition-all duration-200 cursor-text"
                   />
                   <SearchButton 
-                    onClick={() => handleSearchClick(product.product_id)}
+                    itemId={product.product_id}
+                    onProductInfoFound={handleProductInfoFound(product.id)}
                   />
                 </div>
               </div>
@@ -193,9 +281,9 @@ const ProductList = forwardRef<ProductListRef, ProductListProps>(({ onProductsCh
                 <textarea
                   value={product.sellpoint}
                   onChange={(e) => updateProduct(product.id, 'sellpoint', e.target.value)}
-                  placeholder="请输入产品卖点，如：深层补水、改善肤质、提亮肤色"
+                  placeholder="请输入产品卖点，如：纯天然无添加、营养丰富"
                   rows={2}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 hover:border-green-400 transition-all duration-200 cursor-text resize-none"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 hover:border-green-400 transition-all duration-200 resize-none cursor-text"
                 />
               </div>
             </div>

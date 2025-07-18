@@ -8,8 +8,6 @@ const API_CONFIG = {
   timeout: 1800000, // 30分钟
 };
 
-
-
 // OSS查询响应类型
 export interface OSSQueryResponse {
   status: 'success' | 'error';
@@ -21,6 +19,35 @@ export interface OSSQueryResponse {
     oss_url: string;
     oss_path: string;
   }>;
+  error?: string;
+}
+
+// iGraph查询响应类型
+export interface IGraphQueryResponse {
+  status: 'success' | 'error' | 'progress';
+  message?: string;
+  item_id?: string;
+  record_count?: number;
+  data?: {
+    原始数据?: {
+      origin_file_path?: string;
+      discount_price?: string;
+      item_name?: string;
+      label?: string;
+      daily_price?: string;
+      summary_selling_point?: string;
+      brand_ext_info?: string;
+      selling_points?: string;
+      sale_gurantee?: string;
+      show_desc?: string;
+      link_item_id?: string;
+      used_scene?: string;
+      id?: string;
+      link_item_type?: string;
+    };
+  };
+  progress?: number;
+  time_used?: number;
   error?: string;
 }
 
@@ -258,6 +285,184 @@ export async function queryOSSFiles(
         status: 'success',
         message: '查询超时，文件可能还在生成中',
         files_exist: false
+      };
+    }
+    
+    throw error;
+  }
+}
+
+/**
+ * 查询iGraph商品信息
+ * @param itemId 商品ID
+ * @returns Promise<IGraphQueryResponse>
+ */
+export async function queryIGraphInfo(
+  itemId: string
+): Promise<IGraphQueryResponse> {
+  try {
+    const requestBody = {
+      appId: API_CONFIG.appId,
+      bizCode: API_CONFIG.bizCode,
+      config: { requestTimeoutMs: API_CONFIG.timeout },
+      request: {
+        service_type: "igraph_query",
+        item_id: itemId
+      },
+    };
+
+    console.log('🔍 查询商品信息:', itemId);
+
+    const response = await fetch(API_CONFIG.baseUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(120000), // 2分钟超时
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('查询iGraph信息失败:', errorText);
+      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+    }
+
+    // 处理流式响应
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('无法读取响应流');
+    
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let finalResult: IGraphQueryResponse | null = null;
+    let currentEvent = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      
+      buffer += decoder.decode(value, { stream: true });
+      
+      // 处理可能的多行响应
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (trimmedLine === '') {
+          // 空行表示事件结束，重置event
+          currentEvent = '';
+          continue;
+        }
+        
+        if (trimmedLine.startsWith('event:')) {
+          // 处理事件类型
+          currentEvent = trimmedLine.substring(6).trim();
+          continue;
+        }
+        
+        if (trimmedLine.startsWith('data:')) {
+          const jsonStr = trimmedLine.substring(5).trim(); // 移除 'data:' 前缀
+          
+          // 处理不同的事件类型
+          if (currentEvent === 'complete') {
+            break;
+          }
+          
+          try {
+            const data = JSON.parse(jsonStr);
+            
+            // 检查响应数据结构
+            if (data.success && data.data) {
+              const responseData = data.data;
+              
+              if (responseData.status === 'success') {
+                // 查询成功，构造成功响应
+                finalResult = {
+                  status: 'success',
+                  message: responseData.message || '商品信息查询成功',
+                  item_id: responseData.item_id,
+                  record_count: responseData.record_count,
+                  data: responseData.data,
+                  progress: responseData.progress,
+                  time_used: responseData.time_used
+                };
+                console.log('✅ 商品信息查询成功');
+              } else if (responseData.status === 'progress') {
+                // 查询进行中，更新进度状态
+                finalResult = {
+                  status: 'progress',
+                  message: responseData.message,
+                  item_id: responseData.item_id,
+                  progress: responseData.progress,
+                  time_used: responseData.time_used
+                };
+              } else if (responseData.status === 'error') {
+                // 查询失败
+                finalResult = {
+                  status: 'error',
+                  message: responseData.message || '商品信息查询失败',
+                  item_id: responseData.item_id,
+                  error: responseData.message
+                };
+              }
+            }
+          } catch (e) {
+            console.warn('解析iGraph查询响应失败:', trimmedLine);
+          }
+        }
+      }
+    }
+    
+    // 处理剩余的buffer
+    if (buffer.trim()) {
+      const trimmedBuffer = buffer.trim();
+      if (trimmedBuffer.startsWith('data:')) {
+        const jsonStr = trimmedBuffer.substring(5).trim();
+        
+        try {
+          const data = JSON.parse(jsonStr);
+          
+          if (data.success && data.data && data.data.status === 'success') {
+            finalResult = {
+              status: 'success',
+              message: data.data.message || '商品信息查询成功',
+              item_id: data.data.item_id,
+              record_count: data.data.record_count,
+              data: data.data.data,
+              progress: data.data.progress,
+              time_used: data.data.time_used
+            };
+          }
+        } catch (e) {
+          console.warn('解析最终iGraph查询响应失败:', buffer);
+        }
+      }
+    }
+    
+    // 返回结果
+    if (finalResult) {
+      return finalResult;
+    } else {
+      // 没有找到结果，默认返回错误状态
+      return {
+        status: 'error',
+        message: '商品信息查询失败，未获取到有效数据',
+        item_id: itemId,
+        error: 'no_data'
+      };
+    }
+    
+  } catch (error) {
+    console.error('查询iGraph信息失败:', error);
+    
+    // 如果是超时或网络错误，返回错误状态
+    if (error instanceof Error && (error.name === 'AbortError' || error.message.includes('timeout'))) {
+      return {
+        status: 'error',
+        message: '查询超时，请稍后重试',
+        item_id: itemId,
+        error: 'timeout'
       };
     }
     

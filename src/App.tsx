@@ -9,6 +9,7 @@ import { useFileGeneration } from './hooks/useFileGeneration'
 import { useFormValidation } from './hooks/useFormValidation'
 import type { ScriptType } from './types'
 
+
 function App() {
   const [activeTab, setActiveTab] = useState<ScriptType>('单人推品')
   const [isScriptGenerated, setIsScriptGenerated] = useState(false)
