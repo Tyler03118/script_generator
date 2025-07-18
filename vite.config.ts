@@ -16,8 +16,48 @@ export default defineConfig({
       '/pyinfer_tao_pre': {
         target: 'https://tppwork.taobao.com',
         changeOrigin: true,
-        rewrite: path => path.replace(/^\/pyinfer_tao_pre/, '/pyinfer_tao_pre'),
         secure: false,
+        timeout: 600000, // 10分钟超时
+        proxyTimeout: 600000, // 10分钟代理超时
+        configure: (proxy) => {
+          proxy.on('error', (err) => {
+            console.log('代理错误:', err.message);
+          });
+          
+          proxy.on('proxyReq', (proxyReq, req) => {
+            console.log('代理请求开始:', req.method, req.url);
+            // 设置更长的超时时间
+            proxyReq.setTimeout(600000); // 10分钟
+          });
+          
+          proxy.on('proxyRes', (proxyRes, req) => {
+            console.log('代理响应开始:', proxyRes.statusCode, req.url);
+            // 设置响应超时
+            proxyRes.setTimeout(600000); // 10分钟
+          });
+        },
+      },
+      // 添加OSS代理配置以解决CORS问题
+      '/oss-proxy': {
+        target: 'https://mmc-aigc.oss-cn-zhangjiakou.aliyuncs.com',
+        changeOrigin: true,
+        secure: true,
+        pathRewrite: {
+          '^/oss-proxy': '' // 移除代理前缀
+        },
+        configure: (proxy) => {
+          proxy.on('error', (err) => {
+            console.log('OSS代理错误:', err.message);
+          });
+          
+          proxy.on('proxyReq', (proxyReq, req) => {
+            console.log('OSS代理请求:', req.method, req.url);
+          });
+          
+          proxy.on('proxyRes', (proxyRes, req) => {
+            console.log('OSS代理响应:', proxyRes.statusCode, req.url);
+          });
+        },
       },
     },
   },

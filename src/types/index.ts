@@ -59,5 +59,7 @@ export interface TemplateOption {
 
 export interface APIRequestData {
   script_type: ScriptType;
+  excel_file_name?: string;
+  markdown_file_name?: string;
   [key: string]: string | number | boolean | undefined;
 } 

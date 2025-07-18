@@ -3,70 +3,86 @@ import type { APIRequestData } from '../types';
 // API配置
 const API_CONFIG = {
   baseUrl: '/pyinfer_tao_pre/api/v1/inference/stream',
-  appId: 51143,
+  appId: 51143, 
   bizCode: 'live_script_demo',
-  timeout: 900000, // 15分钟
+  timeout: 1800000, // 30分钟
 };
 
-// 响应类型定义
-export interface APIResponse {
-  status: 'success' | 'error' | 'progress';
+
+
+// OSS查询响应类型
+export interface OSSQueryResponse {
+  status: 'success' | 'error';
   message?: string;
-  step?: string;
-  progress?: number;
-  script?: string;
-  script_type?: string;
-  product_name?: string;
-  live_duration?: string;
-  anchor_name?: string;
-  oss_info?: {
-    oss_upload_success: boolean;
-    oss_upload_error?: string;
-    files: Array<{
-      type: string;
-      filename: string;
-      oss_url: string;
-      oss_path: string;
-    }>;
-  };
-  workflow_steps?: {
-    info_search_completed: boolean;
-    script_generated: boolean;
-    content_moderated: boolean;
-    excel_exported: boolean;
-    markdown_exported: boolean;
-    oss_uploaded: boolean;
-  };
-  excel_info?: {
-    excel_generated: boolean;
-    excel_filename?: string;
-    excel_file_path?: string;
-    excel_content_base64?: string;
-    excel_error?: string;
-    excel_disabled?: boolean;
-  };
+  files_exist: boolean;
+  files?: Array<{
+    type: string;
+    filename: string;
+    oss_url: string;
+    oss_path: string;
+  }>;
   error?: string;
-  warning?: string;
 }
 
-// 流式响应回调类型
-export type StreamCallback = (response: APIResponse) => void;
-
 /**
- * 调用直播脚本生成API（流式）
+ * 异步提交直播脚本生成任务（不等待响应）
  * @param requestData 请求数据
- * @param onStream 流式响应回调
+ * @returns Promise<{success: boolean, message: string}>
  */
-export async function generateLiveScript(
-  requestData: APIRequestData,
-  onStream: StreamCallback
-): Promise<void> {
+export async function submitLiveScriptTask(
+  requestData: APIRequestData
+): Promise<{success: boolean, message: string}> {
   try {
     const requestBody = {
       appId: API_CONFIG.appId,
       bizCode: API_CONFIG.bizCode,
       config: { requestTimeoutMs: API_CONFIG.timeout },
-      request: requestData,
+      request: {
+        ...requestData,
+        service_type: "live_script" // 添加service_type参数
+      },
+    };
+
+    console.log('提交脚本生成任务:', requestBody);
+    console.log('请求URL:', API_CONFIG.baseUrl);
+
+    // 发送请求但不等待响应，立即返回成功
+    fetch(API_CONFIG.baseUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    }).then(response => {
+      console.log('脚本生成任务提交响应状态:', response.status, response.statusText);
+    }).catch(error => {
+      console.error('脚本生成任务提交过程中发生错误（不影响流程）:', error);
+    });
+
+    return { success: true, message: '脚本生成任务已提交' };
+  } catch (error) {
+    console.error('提交任务失败:', error);
+    throw error;
+  }
+}
+
+/**
+ * 查询OSS文件是否生成
+ * @param fileName 要查询的文件名
+ * @returns Promise<OSSQueryResponse>
+ */
+export async function queryOSSFiles(
+  fileName: string
+): Promise<OSSQueryResponse> {
+  try {
+    const requestBody = {
+      appId: API_CONFIG.appId,
+      bizCode: API_CONFIG.bizCode,
+      config: { requestTimeoutMs: API_CONFIG.timeout },
+      request: {
+        service_type: "oss_query",
+        name: fileName
+      },
     };
 
     const response = await fetch(API_CONFIG.baseUrl, {
@@ -75,43 +91,105 @@ export async function generateLiveScript(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(requestBody),
-      // 增加超时设置
-      signal: AbortSignal.timeout(300000), // 5分钟超时
+      signal: AbortSignal.timeout(60000), // 60秒超时，因为可能是流式响应
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text();
+      console.error('查询OSS文件失败:', errorText);
+      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
     }
 
+    // 处理流式响应
     const reader = response.body?.getReader();
     if (!reader) throw new Error('无法读取响应流');
+    
     const decoder = new TextDecoder();
     let buffer = '';
+    let finalResult: OSSQueryResponse | null = null;
+    let currentEvent = '';
+
+    console.log('开始读取流式响应...');
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       
       buffer += decoder.decode(value, { stream: true });
-      console.log('收到原始数据:', buffer); // 调试信息
       
+      // 处理可能的多行响应
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
       
       for (const line of lines) {
-        if (line.trim()) {
-          try {
-            // 清理可能的SSE前缀
-            let cleanLine = line.trim();
-            if (cleanLine.startsWith('data: ')) {
-              cleanLine = cleanLine.substring(6);
+        const trimmedLine = line.trim();
+        if (trimmedLine === '') {
+          // 空行表示事件结束，重置event
+          currentEvent = '';
+          continue;
+        }
+        
+        
+        if (trimmedLine.startsWith('event:')) {
+          // 处理事件类型
+          currentEvent = trimmedLine.substring(6).trim();
+          continue;
+        }
+        
+        if (trimmedLine.startsWith('data:')) {
+          const jsonStr = trimmedLine.substring(5).trim(); // 移除 'data:' 前缀
+          
+          // 处理不同的事件类型
+          if (currentEvent === 'complete') {
+            if (!finalResult && jsonStr === '[done]') {
+              finalResult = {
+                status: 'success',
+                message: '搜索完成，未找到文件',
+                files_exist: false
+              };
             }
+            continue;
+          }
+          
+          // 跳过 [done] 标记
+          if (jsonStr === '[done]') {
+            continue;
+          }
+          
+          try {
+            const data = JSON.parse(jsonStr);
             
-            const data = JSON.parse(cleanLine);
-            onStream(data);
+            // 检查响应数据结构
+            if (data.success && data.data) {
+              const responseData = data.data;
+              
+              if (responseData.status === 'success' && responseData.download_url) {
+                // 找到文件，构造成功响应
+                finalResult = {
+                  status: 'success',
+                  message: responseData.message || '文件已找到',
+                  files_exist: true,
+                  files: [{
+                    type: fileName.endsWith('.xlsx') ? 'excel' : 'markdown',
+                    filename: responseData.file_name || fileName,
+                    oss_url: responseData.download_url,
+                    oss_path: responseData.file_path || ''
+                  }]
+                };
+                console.log('✅ 文件已找到!');
+              } else if (responseData.status === 'not_found') {
+                // 明确未找到文件
+                finalResult = {
+                  status: 'success',
+                  message: responseData.message || '未找到文件',
+                  files_exist: false
+                };
+              } else if (responseData.status === 'progress') {
+                // 还在搜索中，继续等待
+              }
+            }
           } catch (e) {
-            // 记录解析失败的原始数据，便于调试
-            console.warn('解析响应数据失败:', line, e);
+            console.warn('解析OSS查询响应失败:', trimmedLine, e);
           }
         }
       }
@@ -119,51 +197,129 @@ export async function generateLiveScript(
     
     // 处理剩余的buffer
     if (buffer.trim()) {
-      try {
-        let cleanBuffer = buffer.trim();
-        if (cleanBuffer.startsWith('data: ')) {
-          cleanBuffer = cleanBuffer.substring(6);
+      const trimmedBuffer = buffer.trim();
+      console.log('处理剩余buffer:', trimmedBuffer);
+      if (trimmedBuffer.startsWith('data:')) {
+        const jsonStr = trimmedBuffer.substring(5).trim();
+        
+        if (jsonStr !== '[done]') {
+          try {
+            const data = JSON.parse(jsonStr);
+            console.log('OSS查询最终响应:', data);
+            
+            if (data.success && data.data) {
+              if (data.data.status === 'success' && data.data.download_url) {
+                finalResult = {
+                  status: 'success',
+                  message: data.data.message || '文件已找到',
+                  files_exist: true,
+                  files: [{
+                    type: fileName.endsWith('.xlsx') ? 'excel' : 'markdown',
+                    filename: data.data.file_name || fileName,
+                    oss_url: data.data.download_url,
+                    oss_path: data.data.file_path || ''
+                  }]
+                };
+              } else if (data.data.status === 'not_found') {
+                finalResult = {
+                  status: 'success',
+                  message: data.data.message || '未找到文件',
+                  files_exist: false
+                };
+              }
+            }
+          } catch (e) {
+            console.warn('解析最终OSS查询响应失败:', buffer, e);
+          }
         }
-        const data = JSON.parse(cleanBuffer);
-        onStream(data);
-      } catch (e) {
-        console.warn('解析最终响应数据失败:', buffer, e);
       }
     }
-  } catch (error) {
-    console.error('API调用详细错误:', error);
-    console.error('错误类型:', (error as any).constructor?.name || 'Unknown');
-    console.error('错误消息:', (error as any).message || 'Unknown error');
     
-    onStream({
-      status: 'error',
-      message: `请求失败: ${error instanceof Error ? error.message : '未知错误'}`,
-      step: 'network_error',
-    });
+    // 返回结果
+    if (finalResult) {
+      console.log('OSS查询最终结果:', finalResult);
+      return finalResult;
+    } else {
+      // 没有找到文件，默认返回未找到状态
+      console.log('没有找到最终结果，返回默认未找到状态');
+      return {
+        status: 'success',
+        message: '搜索完成，未找到文件',
+        files_exist: false
+      };
+    }
+    
+  } catch (error) {
+    console.error('查询OSS文件失败:', error);
+    
+    // 如果是超时或网络错误，返回未找到的状态而不是抛出错误
+    if (error instanceof Error && (error.name === 'AbortError' || error.message.includes('timeout'))) {
+      return {
+        status: 'success',
+        message: '查询超时，文件可能还在生成中',
+        files_exist: false
+      };
+    }
+    
+    throw error;
   }
 }
 
 /**
- * 非流式调用API（用于测试）
- * @param requestData 请求数据
- * @returns Promise<APIResponse>
+ * 轮询查询OSS文件
+ * @param fileName 要查询的文件名
+ * @param onProgress 进度回调
+ * @param maxAttempts 最大尝试次数（默认60次，即5分钟）
+ * @param interval 轮询间隔（默认30秒）
+ * @returns Promise<OSSQueryResponse>
  */
-export async function generateLiveScriptSync(
-  requestData: APIRequestData
-): Promise<APIResponse> {
-  return new Promise((resolve, reject) => {
-    let finalResponse: APIResponse | null = null;
-    generateLiveScript(requestData, (response) => {
-      if (response.status === 'error') {
-        reject(new Error(response.message || '未知错误'));
-        return;
+export async function pollOSSFiles(
+  fileName: string,
+  onProgress?: (attempt: number, maxAttempts: number, response: OSSQueryResponse) => void,
+  maxAttempts: number = 20,
+  interval: number = 30000
+): Promise<OSSQueryResponse> {
+  let attempt = 0;
+  
+  while (attempt < maxAttempts) {
+    attempt++;
+    
+    try {
+      const response = await queryOSSFiles(fileName);
+      
+      // 调用进度回调
+      if (onProgress) {
+        onProgress(attempt, maxAttempts, response);
       }
-      if (response.status === 'success') {
-        finalResponse = response;
+      
+      // 如果文件已生成，返回结果
+      if (response.status === 'success' && response.files_exist) {
+        return response;
       }
-      if (response.progress === 100 || response.status === 'success') {
-        resolve(finalResponse || response);
+      
+      // 如果还有尝试次数，等待后继续
+      if (attempt < maxAttempts) {
+        console.log(`OSS文件未生成，等待${interval/1000}秒后重试... (${attempt}/${maxAttempts})`);
+        await new Promise(resolve => setTimeout(resolve, interval));
       }
-    }).catch(reject);
-  });
-} 
+    } catch (error) {
+      console.error(`轮询OSS文件失败 (尝试 ${attempt}/${maxAttempts}):`, error);
+      
+      // 如果是最后一次尝试，抛出错误
+      if (attempt >= maxAttempts) {
+        throw error;
+      }
+      
+      // 否则等待后继续
+      await new Promise(resolve => setTimeout(resolve, interval));
+    }
+  }
+  
+  // 超时，返回失败结果
+  return {
+    status: 'error',
+    message: '轮询超时，OSS文件未生成',
+    files_exist: false,
+    error: 'timeout'
+  };
+}
