@@ -311,8 +311,6 @@ export async function queryIGraphInfo(
       },
     };
 
-    console.log('🔍 查询商品信息:', itemId);
-
     const response = await fetch(API_CONFIG.baseUrl, {
       method: 'POST',
       headers: {

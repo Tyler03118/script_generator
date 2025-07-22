@@ -109,8 +109,6 @@ const ProductList = forwardRef<ProductListRef, ProductListProps>(({ isGenerating
       product.id === id ? { ...product, ...updateData } : product
     ));
     
-    console.log('✅ 商品信息自动填充成功');
-    
 
   };
 

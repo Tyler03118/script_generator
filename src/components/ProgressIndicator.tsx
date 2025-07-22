@@ -13,7 +13,7 @@ export default function ProgressIndicator({ isFormComplete, isScriptGenerated }:
     { 
       number: 2, 
       title: '生成脚本', 
-      completed: isScriptGenerated 
+      completed: isScriptGenerated && isFormComplete
     }
   ];
 
