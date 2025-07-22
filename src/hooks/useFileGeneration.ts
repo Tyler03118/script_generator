@@ -4,25 +4,51 @@ import type { ScriptType, SingleProductFormData, GuestInteractionFormData, Produ
 
 export type FileGenerationStatus = 'idle' | 'generating' | 'completed' | 'failed';
 
-export interface UseFileGenerationReturn {
+// 单个tab的状态接口
+export interface TabGenerationState {
   isGenerating: boolean;
   fileGenerationStatus: FileGenerationStatus;
   generatedFileName: string;
   generatedFileUrl: string;
   pollProgress: { attempt: number; maxAttempts: number };
+}
+
+export interface UseFileGenerationReturn {
   generateFile: (
     formData: SingleProductFormData | GuestInteractionFormData | ProductSellingPointFormData | null,
     activeTab: ScriptType
   ) => Promise<void>;
-  resetFileGeneration: () => void;
+  resetFileGeneration: (scriptType: ScriptType) => void;
+  getStateForTab: (scriptType: ScriptType) => TabGenerationState;
 }
 
+// 默认状态
+const getDefaultState = (): TabGenerationState => ({
+  isGenerating: false,
+  fileGenerationStatus: 'idle',
+  generatedFileName: '',
+  generatedFileUrl: '',
+  pollProgress: { attempt: 0, maxAttempts: 60 },
+});
+
 export const useFileGeneration = (): UseFileGenerationReturn => {
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [fileGenerationStatus, setFileGenerationStatus] = useState<FileGenerationStatus>('idle');
-  const [generatedFileName, setGeneratedFileName] = useState<string>('');
-  const [generatedFileUrl, setGeneratedFileUrl] = useState<string>('');
-  const [pollProgress, setPollProgress] = useState({ attempt: 0, maxAttempts: 60 });
+  // 使用Map来存储每个scriptType的独立状态
+  const [tabStates, setTabStates] = useState<Map<ScriptType, TabGenerationState>>(new Map());
+
+  // 获取特定tab的状态
+  const getStateForTab = useCallback((scriptType: ScriptType): TabGenerationState => {
+    return tabStates.get(scriptType) || getDefaultState();
+  }, [tabStates]);
+
+  // 更新特定tab的状态
+  const updateTabState = useCallback((scriptType: ScriptType, updates: Partial<TabGenerationState>) => {
+    setTabStates(prev => {
+      const newMap = new Map(prev);
+      const currentState = newMap.get(scriptType) || getDefaultState();
+      newMap.set(scriptType, { ...currentState, ...updates });
+      return newMap;
+    });
+  }, []);
 
   const generateFileName = useCallback((productName: string, activeTab: ScriptType): string => {
     const now = new Date();
@@ -52,11 +78,11 @@ export const useFileGeneration = (): UseFileGenerationReturn => {
   ) => {
     if (!formData) {
       console.error('表单数据为空');
-      alert('表单数据为空');
       return;
     }
 
-    setIsGenerating(true);
+    // 更新当前tab的生成状态
+    updateTabState(activeTab, { isGenerating: true });
     
     try {
       const productName = formData.product_name || 'unknown_product';
@@ -75,13 +101,13 @@ export const useFileGeneration = (): UseFileGenerationReturn => {
         requestData.excel_file_name = fileName;
       }
       
-      setGeneratedFileName(fileName);
+      updateTabState(activeTab, { generatedFileName: fileName });
       
       // 参数校验
       if (!requestData.script_type || !requestData.product_name) {
         console.error('参数缺失: script_type 或 product_name');
         alert('参数缺失: script_type 或 product_name');
-        setIsGenerating(false);
+        updateTabState(activeTab, { isGenerating: false });
         return;
       }
       
@@ -90,67 +116,55 @@ export const useFileGeneration = (): UseFileGenerationReturn => {
       console.log('任务提交结果:', submitResult);
       
       if (submitResult.success) {
-        alert('脚本生成任务已提交! 开始查询OSS文件...');
-        
         // 设置生成状态
-        setFileGenerationStatus('generating');
-        
-        // 开始轮询OSS文件
-        setPollProgress({ attempt: 0, maxAttempts: 60 });
+        updateTabState(activeTab, { 
+          fileGenerationStatus: 'generating',
+          pollProgress: { attempt: 0, maxAttempts: 60 }
+        });
         
         try {
           const ossResult = await pollOSSFiles(
             fileName,
             (attempt, maxAttempts) => {
-              setPollProgress({ attempt, maxAttempts });
-              console.log(`OSS轮询进度: ${attempt}/${maxAttempts}`);
+              updateTabState(activeTab, { 
+                pollProgress: { attempt, maxAttempts }
+              });
+              console.log(`OSS轮询进度 [${activeTab}]: ${attempt}/${maxAttempts}`);
             },
             20,
             30000
           );
           
           if (ossResult.status === 'success' && ossResult.files_exist) {
-            alert('OSS文件已生成完成!');
-            setFileGenerationStatus('completed');
-            if (ossResult.files && ossResult.files.length > 0) {
-              setGeneratedFileUrl(ossResult.files[0].oss_url);
-            }
+            updateTabState(activeTab, { 
+              fileGenerationStatus: 'completed',
+              generatedFileUrl: ossResult.files && ossResult.files.length > 0 ? ossResult.files[0].oss_url : ''
+            });
           } else {
-            alert('OSS文件生成超时或失败');
-            setFileGenerationStatus('failed');
+            updateTabState(activeTab, { fileGenerationStatus: 'failed' });
           }
         } catch (ossError) {
           console.error('OSS轮询失败:', ossError);
-          setFileGenerationStatus('failed');
-          alert('OSS文件查询失败');
+          updateTabState(activeTab, { fileGenerationStatus: 'failed' });
         }
       } else {
-        alert(`任务提交失败: ${submitResult.message || '未知错误'}`);
-        setFileGenerationStatus('failed');
+        updateTabState(activeTab, { fileGenerationStatus: 'failed' });
       }
     } catch (error) {
       console.error('生成失败:', error);
-      alert('生成失败，请重试');
-      setFileGenerationStatus('failed');
+      updateTabState(activeTab, { fileGenerationStatus: 'failed' });
     } finally {
-      setIsGenerating(false);
+      updateTabState(activeTab, { isGenerating: false });
     }
-  }, [generateFileName]);
+  }, [generateFileName, updateTabState]);
 
-  const resetFileGeneration = useCallback(() => {
-    setFileGenerationStatus('idle');
-    setGeneratedFileName('');
-    setGeneratedFileUrl('');
-    setPollProgress({ attempt: 0, maxAttempts: 60 });
-  }, []);
+  const resetFileGeneration = useCallback((scriptType: ScriptType) => {
+    updateTabState(scriptType, getDefaultState());
+  }, [updateTabState]);
 
   return {
-    isGenerating,
-    fileGenerationStatus,
-    generatedFileName,
-    generatedFileUrl,
-    pollProgress,
     generateFile,
     resetFileGeneration,
+    getStateForTab,
   };
 };

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download } from 'lucide-react';
+import { Download, LaptopMinimalCheck, AlertCircle, Bot } from 'lucide-react';
 
 interface FileGenerationStatusProps {
   status: 'idle' | 'generating' | 'completed' | 'failed';
@@ -19,33 +19,42 @@ const FileGenerationStatus: React.FC<FileGenerationStatusProps> = ({
   }
 
   return (
-    <div className="mt-8 p-6 bg-white rounded-lg shadow-lg">
-      <div className="flex flex-col items-center">
-        
-        {/* 生成中状态 */}
-        {status === 'generating' && (
-          <>
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-4"></div>
-            <p className="text-gray-600 mb-2">正在生成脚本文件，大概需要3-5分钟，请耐心等待...</p>
-            <div className="text-sm text-gray-600">
-              📄 生成文件名: {fileName}
+    <div className="flex flex-col items-center py-8">
+      
+      {/* 生成中状态 */}
+      {status === 'generating' && (
+        <>
+          {/* 加载动画 */}
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500 mb-4"></div>
+          
+          <div className="text-center">
+            <div className='flex items-center justify-center'>
+              <Bot className='mr-2 text-blue-400'/>
+              <div className="text-lg font-medium text-gray-800 ">
+              正在生成直播脚本...
             </div>
-          </>
-        )}
-
-        {/* 生成完成状态 */}
-        {status === 'completed' && fileUrl && (
-          <>
-            <p className="text-gray-600 mb-4">直播脚本生成完成😊</p>
-            <div className="flex gap-4">
-              {/* 暂时注释预览功能，因为CORS问题还没完全解决 */}
-              {/* <button 
-                onClick={onPreview}
-                className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
-              >
-                预览脚本
-              </button> */}
+            </div>
+            <div className="text-sm text-gray-500 text-center max-w-md">
+              <span className="text-xs">大概需要3-5分钟，请耐心等待...</span>
               
+              <br />
+              （生成文件名: {fileName}）
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* 生成完成状态 */}
+      {status === 'completed' && (
+        <>
+          <div className='flex items-center justify-center mb-4'>
+            <LaptopMinimalCheck className='h-7 w-7 text-green-500 mr-2'/>
+            <p className="text-lg font-medium text-gray-800">直播脚本生成完成</p>
+          </div>
+
+          {/* 下载按钮 */}
+          {fileUrl && (
+            <div className="flex gap-4 mb-4">
               <a 
                 href={fileUrl} 
                 target="_blank" 
@@ -56,28 +65,40 @@ const FileGenerationStatus: React.FC<FileGenerationStatusProps> = ({
                 下载查看
               </a>
             </div>
-            <div className="text-sm text-gray-600 mt-4">
-              📄 文件名: {fileName}
-            </div>
-          </>
-        )}
+          )}
 
-        {/* 生成失败状态 */}
-        {status === 'failed' && (
-          <>
-            <p className="text-gray-600 mb-4">脚本文件生成失败</p>
-            <button 
-              onClick={onRetry}
-              className="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-            >
-              重新生成
-            </button>
-            <div className="text-sm text-gray-600 mt-4">
-              📄 文件名: {fileName}
+          <div className='flex-col text-center'>
+            <div className="text-sm text-gray-500 mt-4">
+              (文件名: {fileName})
             </div>
-          </>
-        )}
-      </div>
+            <span className="text-sm text-gray-500 mt-4">（该链接只有72小时有效）</span>
+          </div>
+        </>
+      )}
+
+      {/* 生成失败状态 */}
+      {status === 'failed' && (
+        <>
+          <div className='flex items-center justify-center mb-4'>
+            <AlertCircle className='h-7 w-7 text-red-500 mr-2'/>
+            <p className="text-lg font-medium text-gray-800">脚本文件生成失败</p>
+          </div>
+          
+          <div className="text-sm text-red-600 mb-4 text-center max-w-md">
+            生成过程中遇到错误，请重试
+          </div>
+
+          <button 
+            onClick={onRetry}
+            className="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+          >
+            重新生成
+          </button>
+          <div className="text-sm text-gray-500 mt-4">
+            （文件名: {fileName}）
+          </div>
+        </>
+      )}
     </div>
   );
 };

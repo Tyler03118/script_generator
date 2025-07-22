@@ -39,7 +39,7 @@ export default function TopSelector({ activeTab, onTabChange }: TopSelectorProps
   ];
 
   return (
-    <div className="bg-white shadow-sm">
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
       <div className="flex justify-center">
         <div className="max-w-4xl w-full px-6 py-4">
           <TooltipProvider>

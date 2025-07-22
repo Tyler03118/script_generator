@@ -24,6 +24,12 @@ import {
 
 interface RequiredInfoFormProps {
   activeTab: ScriptType;
+  isGeneratingScript?: boolean; // 是否正在生成脚本
+  currentStep?: string; // 当前步骤
+  stepMessage?: string; // 步骤消息
+  progress?: number; // 进度百分比
+  stepCount?: number; // 当前步骤数
+  totalSteps?: number; // 总步骤数
   onDataChange?: (data: SingleProductFormData | GuestInteractionFormData | ProductSellingPointFormData) => void;
   onValidationChange?: (isValid: boolean) => void;
   triggerValidation?: boolean;
@@ -31,6 +37,12 @@ interface RequiredInfoFormProps {
 
 export default function RequiredInfoForm({ 
   activeTab,
+  isGeneratingScript = false,
+  currentStep,
+  stepMessage,
+  progress,
+  stepCount,
+  totalSteps,
   onDataChange,
   onValidationChange,
   triggerValidation = false
@@ -96,19 +108,6 @@ export default function RequiredInfoForm({
     display: '',
     intro: ''
   });
-
-  // 处理品牌信息更新
-  const handleBrandInfoUpdate = useCallback((brandInfo: string) => {
-    if (activeTab === '单人推品') {
-      setSingleProductData(prev => ({ ...prev, brand_name: brandInfo }));
-    } else if (activeTab === '嘉宾互动') {
-      setGuestInteractionData(prev => ({ ...prev, brand_name: brandInfo }));
-    } else if (activeTab === '商品卖点') {
-      setSellingPointData(prev => ({ ...prev, brand_info: brandInfo }));
-    }
-    
-    console.log(`✅ 品牌信息已更新到${activeTab}脚本的品牌信息字段`);
-  }, [activeTab]);
 
   // 验证必填字段
   const validateRequiredFields = useCallback((data: SingleProductFormData | GuestInteractionFormData | ProductSellingPointFormData) => {
@@ -196,14 +195,14 @@ export default function RequiredInfoForm({
     }
   }, [activeTab]);
 
-    // 渲染必填产品基础信息
+  // 渲染必填产品基础信息
   const renderRequiredProductFields = () => {
     return (
       <ProductList
         ref={productListRef}
+        isGeneratingScript={isGeneratingScript}
         onProductsChange={handleProductsChange}
         onValidationChange={setIsProductListValid}
-        onBrandInfoUpdate={handleBrandInfoUpdate}
       />
     );
   };
@@ -240,7 +239,7 @@ export default function RequiredInfoForm({
               value={currentData.anchor_name}
               onChange={(e) => handleInputChange('anchor_name', e.target.value)}
               placeholder="请输入主持人名称"
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 hover:border-cyan-400 transition-all duration-200"
+              className="text-sm w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 hover:border-cyan-400 transition-all duration-200"
             />
           </div>
           {activeTab === '嘉宾互动' && (
@@ -253,20 +252,20 @@ export default function RequiredInfoForm({
                 value={(guestInteractionData as GuestInteractionFormData).guests}
                 onChange={(e) => handleInputChange('guests', e.target.value)}
                 placeholder="请输入明星嘉宾信息，如：杨幂、迪丽热巴"
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 hover:border-cyan-400 transition-all duration-200"
+                className="text-sm w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 hover:border-cyan-400 transition-all duration-200"
               />
             </div>
           )}
-          <div className={activeTab === '嘉宾互动' ? '' : 'md:col-span-2'}>
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               品牌信息
             </label>
-            <textarea
+            <input
+              type="text"
               value={currentData.brand_name}
               onChange={(e) => handleInputChange('brand_name', e.target.value)}
-              placeholder="请输入品牌信息，如：兰蔻1935年诞生于法国，作为全球知名的高端化妆品品牌..."
-              rows={3}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 hover:border-cyan-400 transition-all duration-200 resize-none"
+              placeholder="请输入品牌名称，如：兰蔻935年诞生于法国，作为全球知名的高端化妆品品牌...."
+              className="text-sm w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 hover:border-cyan-400 transition-all duration-200"
             />
           </div>
           <div>
@@ -278,7 +277,7 @@ export default function RequiredInfoForm({
               value={currentData.live_topic}
               onChange={(e) => handleInputChange('live_topic', e.target.value)}
               placeholder="请输入直播主题，如：冬季护肤好搭子"
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 hover:border-cyan-400 transition-all duration-200"
+              className="text-sm w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 hover:border-cyan-400 transition-all duration-200"
             />
           </div>
           <div>
@@ -310,7 +309,7 @@ export default function RequiredInfoForm({
               onChange={(e) => handleInputChange('sessions', e.target.value)}
               placeholder="请输入直播环节设计，如：1.开场福利红包、2.产品介绍 3.实验演绎 4.互动环节 5.结尾"
               rows={3}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 hover:border-cyan-400 transition-all duration-200 resize-none"
+              className="text-sm w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 hover:border-cyan-400 transition-all duration-200 resize-none"
             />
           </div>
           <div>
@@ -322,7 +321,7 @@ export default function RequiredInfoForm({
               value={currentData.props}
               onChange={(e) => handleInputChange('props', e.target.value)}
               placeholder="请输入道具清单，如：产品样品、玻璃杯、kt板"
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 hover:border-cyan-400 transition-all duration-200"
+              className="text-sm w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 hover:border-cyan-400 transition-all duration-200"
             />
           </div>
           <div>
@@ -334,7 +333,7 @@ export default function RequiredInfoForm({
               value={currentData.user_portrait}
               onChange={(e) => handleInputChange('user_portrait', e.target.value)}
               placeholder="请输入目标用户画像，如：25-35岁女性，注重护肤"
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 hover:border-cyan-400 transition-all duration-200"
+              className="text-sm w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 hover:border-cyan-400 transition-all duration-200"
             />
           </div>
         </div>
@@ -362,7 +361,7 @@ export default function RequiredInfoForm({
               value={sellingPointData.retail_price}
               onChange={(e) => handleInputChange('retail_price', e.target.value)}
               placeholder="请输入市场价"
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 hover:border-orange-400 transition-all duration-200"
+              className="text-sm w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 hover:border-orange-400 transition-all duration-200"
             />
           </div>
 
@@ -375,7 +374,7 @@ export default function RequiredInfoForm({
               value={sellingPointData.discount}
               onChange={(e) => handleInputChange('discount', e.target.value)}
               placeholder="请输入折扣信息，如：叠平台199-35券+单品3元券"
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 hover:border-orange-400 transition-all duration-200"
+              className="text-sm w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 hover:border-orange-400 transition-all duration-200"
             />
           </div>
           <div>
@@ -387,7 +386,7 @@ export default function RequiredInfoForm({
               value={sellingPointData.mechanism}
               onChange={(e) => handleInputChange('mechanism', e.target.value)}
               placeholder="请输入优惠机制，如：详情页领券"
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 hover:border-orange-400 transition-all duration-200"
+              className="text-sm w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 hover:border-orange-400 transition-all duration-200"
             />
           </div>
           <div>
@@ -399,7 +398,7 @@ export default function RequiredInfoForm({
               value={sellingPointData.logistics}
               onChange={(e) => handleInputChange('logistics', e.target.value)}
               placeholder="请输入物流信息，如：顺丰包邮，48小时发货"
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 hover:border-orange-400 transition-all duration-200"
+              className="text-sm w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 hover:border-orange-400 transition-all duration-200"
             />
           </div>
           <div>
@@ -411,19 +410,19 @@ export default function RequiredInfoForm({
               value={sellingPointData.pr_date}
               onChange={(e) => handleInputChange('pr_date', e.target.value)}
               placeholder="请输入生产日期，如：2024-01-15"
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 hover:border-orange-400 transition-all duration-200"
+              className="text-sm w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 hover:border-orange-400 transition-all duration-200"
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               品牌信息
             </label>
-            <textarea
+            <input
+              type="text"
               value={sellingPointData.brand_info}
               onChange={(e) => handleInputChange('brand_info', e.target.value)}
-              placeholder="请输入品牌信息，如：兰蔻1935年诞生于法国，作为全球知名的高端化妆品品牌..."
-              rows={3}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 hover:border-orange-400 transition-all duration-200 resize-none"
+              placeholder="请输入品牌信息，如：法国兰蔻，专注护肤30年"
+              className="text-sm w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 hover:border-orange-400 transition-all duration-200"
             />
           </div>
           <div>
@@ -435,7 +434,7 @@ export default function RequiredInfoForm({
               value={sellingPointData.display}
               onChange={(e) => handleInputChange('display', e.target.value)}
               placeholder="请输入展示方式，如：真人试用、实验对比"
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 hover:border-orange-400 transition-all duration-200"
+              className="text-sm w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 hover:border-orange-400 transition-all duration-200"
             />
           </div>
           <div className="md:col-span-2">
@@ -447,7 +446,7 @@ export default function RequiredInfoForm({
               onChange={(e) => handleInputChange('intro', e.target.value)}
               placeholder="请输入产品介绍，如：这款精华液含有玻尿酸成分，能够深层补水保湿"
               rows={3}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 hover:border-orange-400 transition-all duration-200 resize-none"
+              className="text-sm w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 hover:border-orange-400 transition-all duration-200 resize-none"
             />
           </div>
         </div>

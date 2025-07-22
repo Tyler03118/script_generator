@@ -52,6 +52,8 @@ export type FormData = SingleProductFormData | GuestInteractionFormData | Produc
 
 export type ScriptType = '单人推品' | '嘉宾互动' | '商品卖点';
 
+export type FileGenerationStatus = 'idle' | 'generating' | 'completed' | 'failed';
+
 export interface TemplateOption {
   value: string;
   label: string;
@@ -62,4 +64,4 @@ export interface APIRequestData {
   excel_file_name?: string;
   markdown_file_name?: string;
   [key: string]: string | number | boolean | undefined;
-} 
+}

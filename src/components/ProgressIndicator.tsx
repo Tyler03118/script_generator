@@ -7,7 +7,7 @@ export default function ProgressIndicator({ isFormComplete, isScriptGenerated }:
   const steps = [
     { 
       number: 1, 
-      title: '填写脚本信息', 
+      title: '填写信息', 
       completed: isFormComplete 
     },
     { 
@@ -19,12 +19,12 @@ export default function ProgressIndicator({ isFormComplete, isScriptGenerated }:
 
   return (
     <div className="fixed left-8 top-1/2 transform -translate-y-1/2 z-10">
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 w-36">
+      <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-4 w-22">
         <div className="space-y-6">
           {steps.map((step, index) => (
             <div key={step.number} className="flex flex-col items-center">
               <div
-                className={`w-12 h-12 rounded-full flex items-center justify-center font-semibold text-sm transition-all duration-300 ${
+                className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm transition-all duration-300 ${
                   step.completed
                     ? 'bg-green-500 text-white shadow-lg'
                     : 'bg-white text-gray-400 border-2 border-gray-200'
