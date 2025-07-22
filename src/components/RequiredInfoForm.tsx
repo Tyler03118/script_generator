@@ -38,11 +38,6 @@ interface RequiredInfoFormProps {
 export default function RequiredInfoForm({ 
   activeTab,
   isGeneratingScript = false,
-  currentStep,
-  stepMessage,
-  progress,
-  stepCount,
-  totalSteps,
   onDataChange,
   onValidationChange,
   triggerValidation = false
@@ -455,7 +450,7 @@ export default function RequiredInfoForm({
   };
 
   return (
-    <div className="flex justify-center items-start min-h-screen py-8">
+    <div className="flex justify-center items-start min-h-screen py-4">
       <div className="w-full max-w-6xl space-y-6">
       {/* 标题和描述 */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">

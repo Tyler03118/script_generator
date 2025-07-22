@@ -5,7 +5,6 @@ import RequiredInfoForm from './components/RequiredInfoForm'
 import GenerateButton from './components/GenerateButton'
 import ExcelPreviewModal from './components/ExcelPreviewModal'
 import ScriptPreview from './components/ScriptPreview'
-import FileGenerationStatus from './components/FileGenerationStatus'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useFileGeneration } from './hooks/useFileGeneration'
 import { useFormValidation } from './hooks/useFormValidation'
@@ -19,7 +18,6 @@ function App() {
   // 使用文件生成相关的 hook
   const {
     generateFile,
-    resetFileGeneration,
     getStateForTab,
   } = useFileGeneration()
 

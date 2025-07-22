@@ -1,12 +1,22 @@
 import { useState } from 'react';
 import type { SingleProductFormData, GuestInteractionFormData, ProductSellingPointFormData } from '../types';
-import { LoaderCircle } from 'lucide-react';
+import { Brain, LoaderCircle, TriangleAlert } from 'lucide-react';
+
+// 定义联合类型
+type FormDataType = SingleProductFormData | GuestInteractionFormData | ProductSellingPointFormData;
+
+// 扩展 Window 接口
+declare global {
+  interface Window {
+    getJoinedProductData?: () => Partial<FormDataType>;
+  }
+}
 
 interface GenerateButtonProps {
   onGenerate: () => void;
   isLoading?: boolean;
   isFormValid?: boolean;
-  formData?: SingleProductFormData | GuestInteractionFormData | ProductSellingPointFormData | null;
+  formData?: FormDataType | null;
 }
 
 export default function GenerateButton({ 
@@ -20,37 +30,32 @@ export default function GenerateButton({
   const handleClick = () => {
     if (!isFormValid) {
       setShowError(true);
-      // 3秒后隐藏错误提示
       setTimeout(() => setShowError(false), 3000);
       return;
     }
 
     // 获取拼接后的产品数据
-    const getJoinedProductData = (window as typeof window & { getJoinedProductData?: () => any }).getJoinedProductData;
-    let finalFormData = formData;
+    const getJoinedProductData = window.getJoinedProductData;
+    let finalFormData: FormDataType | null = formData;
 
-    if (getJoinedProductData) {
+    if (getJoinedProductData && formData) {
       const joinedData = getJoinedProductData();
       finalFormData = {
         ...formData,
         ...joinedData
-      };
+      } as FormDataType;
     }
 
-    // 表单有效，输出参数并调用生成函数
     console.log('生成脚本参数:', finalFormData);
     onGenerate();
   };
 
   return (
     <div className="my-2 text-center">
-      {/* 错误提示 */}
       {showError && (
         <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg shadow-sm animate-pulse">
           <div className="flex items-center space-x-2">
-            <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-            </svg>
+            <TriangleAlert className='text-red-500'/>
             <span className="font-medium">请先填写所有必填信息！</span>
           </div>
         </div>
@@ -73,14 +78,12 @@ export default function GenerateButton({
             </>
           ) : (
             <>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              <span>生成脚本</span>
+              <Brain className='w-5 h-5'/>
+              <span> 生成脚本</span>
             </>
           )}
         </div>
       </button>
     </div>
   );
-} 
+}

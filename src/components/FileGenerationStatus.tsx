@@ -19,7 +19,7 @@ const FileGenerationStatus: React.FC<FileGenerationStatusProps> = ({
   }
 
   return (
-    <div className="flex flex-col items-center py-8">
+    <div className="flex flex-col items-center py-40">
       
       {/* 生成中状态 */}
       {status === 'generating' && (
