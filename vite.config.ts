@@ -24,8 +24,8 @@ export default defineConfig({
             console.log('代理错误:', err.message);
           });
           
-          proxy.on('proxyReq', (proxyReq, req) => {
-            console.log('代理请求开始:', req.method, req.url);
+          proxy.on('proxyReq', (proxyReq) => {
+            console.log('代理请求开始:', proxyReq.method, proxyReq.path);
             // 设置更长的超时时间
             proxyReq.setTimeout(600000); // 10分钟
           });
@@ -42,16 +42,14 @@ export default defineConfig({
         target: 'https://mmc-aigc.oss-cn-zhangjiakou.aliyuncs.com',
         changeOrigin: true,
         secure: true,
-        pathRewrite: {
-          '^/oss-proxy': '' // 移除代理前缀
-        },
+        rewrite: (path) => path.replace(/^\/oss-proxy/, ''), // 使用rewrite替代pathRewrite
         configure: (proxy) => {
           proxy.on('error', (err) => {
             console.log('OSS代理错误:', err.message);
           });
           
-          proxy.on('proxyReq', (proxyReq, req) => {
-            console.log('OSS代理请求:', req.method, req.url);
+          proxy.on('proxyReq', (proxyReq) => {
+            console.log('OSS代理请求:', proxyReq.method, proxyReq.path);
           });
           
           proxy.on('proxyRes', (proxyRes, req) => {
