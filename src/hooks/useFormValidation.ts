@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import type { ScriptType, SingleProductFormData, GuestInteractionFormData, ProductSellingPointFormData } from '../types';
+import type { SingleProductFormData, GuestInteractionFormData, ProductSellingPointFormData } from '../types';
 
 export interface UseFormValidationReturn {
   formData: SingleProductFormData | GuestInteractionFormData | ProductSellingPointFormData | null;

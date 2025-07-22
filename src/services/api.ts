@@ -408,7 +408,7 @@ export async function queryIGraphInfo(
               }
             }
           } catch (e) {
-            console.warn('解析iGraph查询响应失败:', trimmedLine);
+            console.warn('解析iGraph查询响应失败:', trimmedLine, e);
           }
         }
       }
@@ -435,7 +435,7 @@ export async function queryIGraphInfo(
             };
           }
         } catch (e) {
-          console.warn('解析最终iGraph查询响应失败:', buffer);
+          console.warn('解析最终iGraph查询响应失败:', buffer, e);
         }
       }
     }

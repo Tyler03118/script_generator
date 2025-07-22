@@ -65,6 +65,7 @@ const SearchButton = ({ onClick, className = '', itemId, isGeneratingScript = fa
             }
           } catch (e) {
             // 如果不是 JSON 格式，直接使用原始数据
+            console.error('❌ selling_points 不是 JSON 格式', e);
             processedSellpoint = productData.selling_points;
           }
         }
